@@ -1,0 +1,7 @@
+name = "AdaptABC"
+uuid = "a186135a-cb04-4274-8be9-42b92f80bdaa"
+authors = ["Mitchell J. O'Sullivan <contact@mosullivan.au> and contributors"]
+version = "0.0.0"
+
+[compat]
+julia = "1.6"
