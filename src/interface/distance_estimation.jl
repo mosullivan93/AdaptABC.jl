@@ -1,3 +1,21 @@
+# abstract type EstimatorInputForm; end
+# abstract type MaskedSamples <: EstimatorInputForm; end
+# abstract type WeightedSamples <: EstimatorInputForm; end
+# abstract type LogWeights <: WeightedSamples; end
+# abstract type LinearWeights <: WeightedSamples; end
+
+# abstract type StatisticalDistanceEstimator{W<:EstimatorInputForm}; end
+# # evaluate(e::StatisticalDistanceEstimator, mask_or_weights; output_scale::Union{Val{:LogScale}, Val{:LinearScale}}=Val(:LogScale), normalised::Union{Val{true}, Val{false}}=Val(false)) = eva
+
+# abstract type AlphaDivergence{α, W} <: StatisticalDistanceEstimator{W}; end
+# # Weighted and Masked Estimators
+
+# est(...)
+# estu(...)
+# logest(...)
+# logestu(...)
+
+
 abstract type StatisticalDistanceEstimator; end
 (e::StatisticalDistanceEstimator)(args...; kwargs...) = exp(e(Val(:log), args...; kwargs...))
 (::StatisticalDistanceEstimator)(::Val{:log}, args...; kwargs...) = error("Not implemented")

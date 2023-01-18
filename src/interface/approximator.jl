@@ -39,9 +39,12 @@ end
 KernelRecipe(; k::Type{<:SupportedKernelDistributions} = Uniform, ρ::SemiMetric = euclidean, t::AbstractTransform = IdentityTransform()) = KernelRecipe(k, ρ, t)
 # Construct a copy of this kernel recipe with desired changes
 revise(K::KernelRecipe; k=K.family, ρ=K.metric, t=K.transform) = KernelRecipe(k, ρ, t)
+Base.convert(::Type{KernelRecipe{D, R, Tto}}, k::KernelRecipe{D, R, Tfrom}) where {D, R, Tfrom <: AbstractTransform, Tto <: ScalingTransform} = revise(k; t=convert(Tto, k.transform))
 
+# Compute the distance according to the metric of the given kernel
+_distance(K::KernelRecipe, T_sx, T_sy) = K.metric(T_sx, T_sy)
 # Compute the distance according to the metric and transformation of the given kernel
-distance(K::KernelRecipe, summ_x, summ_y) = K.metric(K.transform(summ_x), K.transform(summ_y))
+distance(K::KernelRecipe, summ_x, summ_y) = _distance(K, K.transform(summ_x), K.transform(summ_y))
 # Convenience shortcut when distance should be relative to the observation of the posterior
 distance(K::KernelRecipe, mdl::ImplicitPosterior, summ_x) = distance(K, mdl.observed_summs, summ_x)
 
@@ -65,9 +68,10 @@ end
 Kernel(m::ImplicitPosterior, ϵ::Float64; k::Type{<:SupportedKernelDistributions} = Uniform, ρ::SemiMetric = euclidean, t::AbstractTransform = IdentityTransform()) = Kernel(m, ϵ, KernelRecipe(k, ρ, t))
 # Construct a copy of this kernel with desired changes
 revise(K::Kernel; ϵ=K.bandwidth, k=K.recipe.family, ρ=K.recipe.metric, t=K.recipe.transform) = Kernel(K.model, ϵ, KernelRecipe(k, ρ, t))
+Base.convert(::Type{Kernel{D, R, Tto, M}}, k::Kernel{D, R, Tfrom, M}) where {D, R, Tfrom <: AbstractTransform, Tto <: ScalingTransform, M} = revise(k; t=convert(Tto, k.recipe.transform))
 
 # Compute the distance of a simulation from the model with this kernel
-distance(K::Kernel, summ_x) = distance(K.recipe, K.model, summ_x)
+distance(K::Kernel, summ_x) = _distance(K.recipe, K.transformed_summs, K.recipe.transform(summ_x))
 
 # Perform the rescaling of a distance with the bandwidth and evaluate the recipe pdf.
 _pdfu(K::Kernel, u::Real) = _pdfu(K.recipe, u/K.bandwidth)

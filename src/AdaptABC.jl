@@ -7,6 +7,7 @@ using LogExpFunctions
 using SpecialFunctions
 using StatsBase
 using LinearAlgebra
+using Optim
 using Manifolds
 using Manopt
 
