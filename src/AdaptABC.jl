@@ -29,6 +29,7 @@ export
     Kernel,
     KernelRecipe,
     ProductKernel,
+    adapt_ess,
 
     # Samplers
     rejection_sampler,
@@ -39,12 +40,13 @@ export
     adaptive_smc_sampler_opt_dfo,
 
     # Transformations
-    ScalingTransform
+    ScalingTransform,
+    IdentityTransform
 
 
 # Fix broadcasting of pdf, logpdf
 Broadcast.broadcastable(d::Distribution) = Ref(d)
-Broadcast.broadcasted(::Broadcast.DefaultArrayStyle{2}, f::Union{typeof(pdf), typeof(logpdf)}, d::Base.RefValue{<:MultivariateDistribution}, xs::Matrix{<:Number}) = broadcasted(f, d[], eachcol(xs))
+Broadcast.broadcasted(::Broadcast.DefaultArrayStyle{2}, f::Union{typeof(pdf), typeof(logpdf)}, d::Base.RefValue{<:MultivariateDistribution}, xs::Matrix{<:Number}) = Broadcast.broadcasted(f, d[], eachcol(xs))
 Broadcast.broadcasted(::Broadcast.DefaultArrayStyle{1}, f::Union{typeof(pdf), typeof(logpdf)}, d::Base.RefValue{<:MultivariateDistribution}, x::Vector{<:Number}) = Broadcast.Broadcasted(f, (d, Ref(x)))
 
 # Not needed unless adding in a DefaultArrayStyle{N} one (e.g. always store variates along last dimension)...
