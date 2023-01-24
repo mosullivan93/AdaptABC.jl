@@ -59,9 +59,11 @@ const BhattacharyyaCoefficient = AlphaIntegralFunctional{0.5}
 silverman_rule_of_thumb(ps::AbstractVector) = 0.9*min(std(ps; corrected=false), iqr(ps)/1.34)*(length(ps))^(-1/5)
 function silverman_rule_of_thumb(ps::AbstractMatrix)
     d, N = size(ps)
-    return (4/(d+2))^(1/(d+4))*sqrt(mean(var(ps, dims=2)))*N^(-1/(d+4))
+    return sqrt(mean(var(ps, dims=2)))*(4/(d+2)/N)^(1/(d+4))
 end
-adaptive_k(ps, nus) = sum(median(nus, dims=2) .< silverman_rule_of_thumb(ps)) + 1
+# adaptive_k(ps, nus) = count(mean(nus) .< silverman_rule_of_thumb(ps)) + 1
+adaptive_k(ps, nus) = count(mean(nus, dims=2) .< silverman_rule_of_thumb(ps)) + 1
+# adaptive_k(ps, nus) = 11
 
 struct WeightedSampleBC <: BhattacharyyaCoefficient
     # Log of the non-weight terms in the summand of the estimator.
@@ -145,4 +147,32 @@ function evaluate_biased(e::SubsetSampleBC, idx)
     lηs = log.(kept_nus[e.k, :])
 
     return logsumexp((e.lqs[idx] .+ lλs .+ e.d*lηs)/2)
+end
+
+# adaptive kernel distance estimator
+struct AdaptiveKernelEstimator{K<:KernelRecipe, M<:ImplicitPosterior, E<:StatisticalDistanceEstimator}
+    recipe::K
+    post::M
+    estimator::E
+    summs::Matrix{Float64}
+    target_ess::Int
+
+    function AdaptiveKernelEstimator(::Type{EstimatorType}, post, thetas, summs, recipe, target_ess; k=missing) where {EstimatorType <: StatisticalDistanceEstimator}
+        return new{typeof(recipe), typeof(post), EstimatorType}(recipe, post, EstimatorType(thetas, prior(post); k=k), summs, target_ess)
+    end
+end
+
+function est_inputs(ake::AdaptiveKernelEstimator, tx::AbstractTransform)
+    ak = adapt_ess(ake.post, revise(ake.recipe, t=tx), ake.summs, ake.target_ess)
+    input = estimator_kernel_input.(ake.estimator, ak, eachcol(ake.summs))
+    return (ake.estimator, ak, input)
+end
+
+for fn in [:est, :estb, :logest, :logestb]
+    eval(quote
+        function $(fn)(ake::AdaptiveKernelEstimator, tx::AbstractTransform)
+            (e, k, i) = est_inputs(ake, tx)
+            return ($(fn)(e, i), k, i)
+        end
+    end)
 end

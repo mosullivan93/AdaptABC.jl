@@ -41,7 +41,15 @@ export
 
     # Transformations
     ScalingTransform,
-    IdentityTransform
+    IdentityTransform,
+
+    # Distance Estimation
+    StatisticalDistanceEstimator,
+    BhattacharyyaCoefficient,
+    WeightedSampleBC,
+    SubsetSampleBC,
+    AdaptiveKernelEstimator,
+    est, estb, logest, logestb
 
 
 # Fix broadcasting of pdf, logpdf

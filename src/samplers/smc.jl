@@ -46,17 +46,19 @@ function smc_sampler(post::ImplicitPosterior{M, P, S}, K::KernelRecipe{Uniform, 
 
         q_cov .= cov(θ[:, 1:N_move], dims=2)
         local accs = zeros(Int, N_move)
-        Threads.@threads for I = 1:N_move
-            shuffle_θ, shuffle_X, shuffle_ρ, shuffle_moves = mcmc_sampler(post, curr_K, R, MvNormal(q_cov); θ₀=θ[:, I], X₀=X[:, I])
+        let R=R, curr_K=curr_K
+            Threads.@threads for I = 1:N_move
+                shuffle_θ, shuffle_X, shuffle_ρ, shuffle_moves = mcmc_sampler(post, curr_K, R, MvNormal(q_cov); θ₀=θ[:, I], X₀=X[:, I])
 
-            θ[:, I] .= shuffle_θ[:, end]
-            X[:, I] .= shuffle_X[:, end]
-            ρ[I] = last(shuffle_ρ)
-            accs[I] = shuffle_moves
+                θ[:, I] .= shuffle_θ[:, end]
+                X[:, I] .= shuffle_X[:, end]
+                ρ[I] = last(shuffle_ρ)
+                accs[I] = shuffle_moves
+            end
         end
         final_iter && break
         p_acc = sum(accs)/(R*N_drop)
-        R = ceil(Int, log(1-p_acc, c))::Int
+        R = ceil(Int, log(1-p_acc, c))
         @show p_acc, R
 
         idx = sortperm(ρ)
