@@ -22,7 +22,12 @@ abstract type AbstractImplicitBayesianModel{M <: ImplicitDistribution, P<:Distri
 (m::AbstractImplicitBayesianModel)(obs) = ImplicitPosterior(m; obs_data=obs)
 (m::AbstractImplicitBayesianModel)(;kwargs...) = ImplicitPosterior(m; kwargs...)
 Broadcast.broadcastable(d::AbstractImplicitBayesianModel) = Ref(d)
+function Base.rand(mdl::AbstractImplicitBayesianModel)
+    pr = rand(prior(mdl))
+    xs = simulator(mdl)(pr)
 
+    return (pr, xs)
+end
 struct ImplicitBayesianModel{M, P} <: AbstractImplicitBayesianModel{M, P}
     model::Type{M}
     prior::P
@@ -30,29 +35,24 @@ end
 paramnames(mdl::ImplicitBayesianModel) = fieldnames(mdl.model)
 prior(mdl::ImplicitBayesianModel) = mdl.prior
 simulator(::ImplicitBayesianModel{M}) where {M} = Base.Fix1(sim_summ, M)
-function Base.rand(mdl::ImplicitBayesianModel)
-    pr = rand(mdl.prior)
-    xs = rand(mdl.model(pr...))
-
-    return (pr, xs)
-end
 Distributions.pdf(p::ImplicitBayesianModel, x) = pdf(p.prior, x[1])*pdf(p.model(x[1]...), x[2])
 Distributions.logpdf(p::ImplicitBayesianModel, x) = logpdf(p.prior, x[1]) + logpdf(p.model(x[1]...), x[2])
 
-struct TransformedImplicitBayesianModel{M, P, B} <: AbstractImplicitBayesianModel{M, P}
-    original_model::ImplicitBayesianModel{M, P}
+struct TransformedImplicitBayesianModel{M, P, O, B} <: AbstractImplicitBayesianModel{M, P}
+    original_model::O
+    t_prior::P
     transform::B
+
+    function TransformedImplicitBayesianModel(m::ImplicitBayesianModel{M, P}, b::B) where {M, P, B<:Bijector}
+        tp = transformed(prior(m))
+        return new{M, typeof(tp), ImplicitBayesianModel{M, P}, B}(m, tp, b)
+    end
 end
 paramnames(mdl::TransformedImplicitBayesianModel) = paramnames(mdl.original_model)
 #* should this be precomputed and saved?
-prior(mdl::TransformedImplicitBayesianModel) = transformed(prior(mdl.original_model), mdl.transform)
+# prior(mdl::TransformedImplicitBayesianModel) = transformed(prior(mdl.original_model), mdl.transform)
+prior(mdl::TransformedImplicitBayesianModel) = mdl.t_prior
 simulator(mdl::TransformedImplicitBayesianModel{M}) where {M} = simulator(mdl.original_model) ∘ Base.Fix1(invlink, mdl)
-function Base.rand(mdl::TransformedImplicitBayesianModel)
-    #! can I do this?
-    pr, xs = rand(mdl.original_model)
-
-    return (link(mdl, pr), xs)
-end
 Distributions.pdf(p::TransformedImplicitBayesianModel, y) = pdf(prior(p), y[1])*pdf(p.model(invlink(p, x[1])...), x[2])
 Distributions.logpdf(p::TransformedImplicitBayesianModel, y) = logpdf(prior(p), y[1]) + logpdf(p.model(invlink(p, x[1])...), x[2])
 Bijectors.bijector(m::ImplicitBayesianModel) = bijector(prior(m))
@@ -61,8 +61,10 @@ Bijectors.link(m::TransformedImplicitBayesianModel, x) = m.transform(x)
 Bijectors.invlink(m::TransformedImplicitBayesianModel, y) = inverse(m.transform)(y)
 
 "An implicit bayesian model where the observed data has been specified."
+#! todo: test when this was the abstraction again... seems like it worked.
 struct ImplicitPosterior{M, P, S} <: Distribution{Multivariate, Continuous}
-    bayesmodel::AbstractImplicitBayesianModel{M, P} #! fix this for type stability. Shouldn't be Abstract.
+    bayesmodel::Union{ImplicitBayesianModel{M, P}, TransformedImplicitBayesianModel{M, P}} #! fix this for type stability. Shouldn't be Abstract.
+    # bayesmodel::AbstractImplicitBayesianModel{M, P} #! fix this for type stability. Shouldn't be Abstract.
     # observed_data won't be type stable but shouldn't be accessed often.
     observed_data::Union{Missing, Array{Float64}}
     observed_summs::Vector{Float64}

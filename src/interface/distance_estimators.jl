@@ -29,10 +29,10 @@ EstimatorOutputFormat(::Type{<:StatisticalDistanceEstimator}) = error("Undefined
 
 # a function to handle the bias/unbiased evaluation
 evaluate_biased(e::T, x) where {T<:StatisticalDistanceEstimator} = evaluate_biased(EstimatorOutputFormat(T), e, x)
-evaluate_biased(e::ExactAnswer, ::StatisticalDistanceEstimator, x) = evaluate(EstimatorOutputFormat(T), e, x)
+evaluate_biased(::ExactAnswer, e::StatisticalDistanceEstimator, x) = evaluate(e, x)
 
 evaluate(e::T, x) where {T<:StatisticalDistanceEstimator} = evaluate(EstimatorOutputFormat(T), e, x)
-evaluate(e::BiasedAnswer, ::StatisticalDistanceEstimator, _) = error("Missing implementation for unbiased evaluation.")
+evaluate(::BiasedAnswer, ::StatisticalDistanceEstimator, _) = error("Missing implementation for unbiased evaluation.")
 
 # a function to handle log/linear scale evaluation
 est(e::T, x) where {T<:StatisticalDistanceEstimator} = est(EstimatorOutputScale(T), e, x)
@@ -63,7 +63,7 @@ function silverman_rule_of_thumb(ps::AbstractMatrix)
 end
 # adaptive_k(ps, nus) = count(mean(nus) .< silverman_rule_of_thumb(ps)) + 1
 adaptive_k(ps, nus) = count(mean(nus, dims=2) .< silverman_rule_of_thumb(ps)) + 1
-# adaptive_k(ps, nus) = 11
+# adaptive_k(ps, nus) = 5
 
 struct WeightedSampleBC <: BhattacharyyaCoefficient
     # Log of the non-weight terms in the summand of the estimator.
@@ -149,6 +149,13 @@ function evaluate_biased(e::SubsetSampleBC, idx)
     return logsumexp((e.lqs[idx] .+ lλs .+ e.d*lηs)/2)
 end
 
+# BootstrappedDistanceEstimator
+abstract type BootstrappedDistanceEstimator{E<:StatisticalDistanceEstimator} <: StatisticalDistanceEstimator end
+
+function BootstrappedDistanceEstimator{E}(ps::AbstractArray, q::ContinuousDistribution; k::Union{Missing,Int}=missing) where {E}
+    return E(ps[:, rand(1:size(ps, 2), size(ps, 2))], q; k=k)
+end
+
 # adaptive kernel distance estimator
 struct AdaptiveKernelEstimator{K<:KernelRecipe, M<:ImplicitPosterior, E<:StatisticalDistanceEstimator}
     recipe::K
@@ -158,7 +165,8 @@ struct AdaptiveKernelEstimator{K<:KernelRecipe, M<:ImplicitPosterior, E<:Statist
     target_ess::Int
 
     function AdaptiveKernelEstimator(::Type{EstimatorType}, post, thetas, summs, recipe, target_ess; k=missing) where {EstimatorType <: StatisticalDistanceEstimator}
-        return new{typeof(recipe), typeof(post), EstimatorType}(recipe, post, EstimatorType(thetas, prior(post); k=k), summs, target_ess)
+        estim = EstimatorType(thetas, prior(post); k=k)
+        return new{typeof(recipe), typeof(post), typeof(estim)}(recipe, post, estim, summs, target_ess)
     end
 end
 
@@ -175,4 +183,19 @@ for fn in [:est, :estb, :logest, :logestb]
             return ($(fn)(e, i), k, i)
         end
     end)
+end
+
+struct SubsetSampleDOPT <: StatisticalDistanceEstimator
+    # Pairwise distances in the full sample.
+    ps::Matrix{Float64}
+
+    function SubsetSampleDOPT(ps::AbstractArray, q::ContinuousDistribution; k::Union{Missing,Int}=missing)
+        return new(ps)
+    end
+end
+EstimatorInputArgsFormat(::Type{SubsetSampleDOPT}) = MaskedSamples()
+EstimatorOutputScale(::Type{SubsetSampleDOPT}) = LinearScale()
+EstimatorOutputFormat(::Type{SubsetSampleDOPT}) = ExactAnswer()
+function evaluate(e::SubsetSampleDOPT, idx)
+    return det(cov(e.ps[:, idx], dims=2))
 end

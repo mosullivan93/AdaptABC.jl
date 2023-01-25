@@ -6,7 +6,7 @@
 
 # function smc_sampler(post::ImplicitPosterior{M, P, S}, K::KernelRecipe{Uniform, D, T}, N::Integer,
 #                      drop_prop::Float64, R₀::Integer, p_thresh::Float64, c::Float64) where {M, P, S, D, T}
-function smc_sampler(post::ImplicitPosterior{M, P, S}, K::KernelRecipe{Uniform, D, T}, N::Integer,
+function smc_sampler(post::ImplicitPosterior{M, P, S}, K::KernelRecipe{Uniform, D, T}, N::Integer;
     drop::Percentage=%(50), R₀=10, p_thresh=0.05, c=0.05) where {M, P, S, D, T}
     # Setup
     π = prior(post)
@@ -19,6 +19,7 @@ function smc_sampler(post::ImplicitPosterior{M, P, S}, K::KernelRecipe{Uniform, 
     
     # Initialise particles
     local θ::Matrix{Float64}
+    local oθ::Matrix{Float64}
     local X::Matrix{Float64}
     local ρ::Vector{Float64}
     local curr_K::Kernel{Uniform, D, T, ImplicitPosterior{M, P, S}}
@@ -26,6 +27,7 @@ function smc_sampler(post::ImplicitPosterior{M, P, S}, K::KernelRecipe{Uniform, 
     #* always sorted by this method
     θ, X, ρ, curr_K = rejection_sampler(post, K, N)
     @show curr_K.bandwidth
+    oθ = similar(θ)
 
     local q_cov::Matrix{Float64} = Matrix{Float64}(undef, length(π), length(π))
     local p_acc::Float64 = 1.0
@@ -66,8 +68,14 @@ function smc_sampler(post::ImplicitPosterior{M, P, S}, K::KernelRecipe{Uniform, 
         X .= X[:, idx]
         ρ .= ρ[idx]
 
-        @show mean(θ, dims=2)
-        @show var(θ, dims=2)
+        if π isa Bijectors.TransformedDistribution
+            oθ .= invlink(post.bayesmodel, θ)
+            @show mean(oθ, dims=2)
+            @show var(oθ, dims=2)
+        else
+            @show mean(θ, dims=2)
+            @show var(θ, dims=2)
+        end
 
         final_iter = p_acc < p_thresh
     end

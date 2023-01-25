@@ -7,10 +7,19 @@ using LogExpFunctions
 using SpecialFunctions
 using StatsBase
 using LinearAlgebra
-using Optim
+import Optim
 using Manifolds
+import ManifoldsBase
 using Manopt
 using Bijectors
+import BlackBoxOptim: bboptimize, best_candidate
+import LineSearches
+import QuasiMonteCarlo
+using Surrogates
+using AbstractGPs
+using SurrogatesAbstractGPs
+import ManifoldDiff
+import FiniteDifferences
 
 export
     # The implicit model and associate algebraic tools
@@ -55,10 +64,11 @@ export
     est, estb, logest, logestb
 
 
-# Fix broadcasting of pdf, logpdf
+# Fix broadcasting of pdf, logpdf (read: type piracy)
 Broadcast.broadcastable(d::Distribution) = Ref(d)
 Broadcast.broadcasted(::Broadcast.DefaultArrayStyle{2}, f::Union{typeof(pdf), typeof(logpdf)}, d::Base.RefValue{<:MultivariateDistribution}, xs::Matrix{<:Number}) = Broadcast.broadcasted(f, d[], eachcol(xs))
 Broadcast.broadcasted(::Broadcast.DefaultArrayStyle{1}, f::Union{typeof(pdf), typeof(logpdf)}, d::Base.RefValue{<:MultivariateDistribution}, x::Vector{<:Number}) = Broadcast.Broadcasted(f, (d, Ref(x)))
+Manifolds.Sphere(::Val{n}, field::ManifoldsBase.AbstractNumbers=ℝ) where {n} = Sphere(n, field)
 
 # Not needed unless adding in a DefaultArrayStyle{N} one (e.g. always store variates along last dimension)...
 #broadcasted(::DefaultArrayStyle{1}, f::typeof(pdf), d::RefValue{<:UnivariateDistribution}, xs::Vector{<:Number}) = Broadcasted(f, (d, xs))
