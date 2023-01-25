@@ -107,15 +107,3 @@ Distributions.logpdf(::ProductKernel, _) = error("Exact evaluation of logpdf of 
 # Compute the unnormalised (log)pdf for a given vector of summary statistics with this kernel
 pdfu(PK::ProductKernel, summ_x) = exp(logpdfu(PK, summ_x))
 logpdfu(PK::ProductKernel, summ_x) = sum(logpdfu(k, summ_x) for k in PK.kernels)
-
-
-#? BandwidthAdaptiveKernel
-# struct BandwidthAdaptiveKernel{D <: ContinuousUnivariateDistribution} <: PosteriorApproximator{D}
-# end
-
-## ! Change this
-#todo: Come back to this.
-# adapt should accept a kernel recipe, a model, and samples. It also accepts an optional kwarg (ess).
-# without ess, it does the same thing as the _rejection methods, with ess it targets that value.
-# adapt(K::KernelRecipe; k=K.d, ρ=K.ρ, T=K.T) = KernelRecipe(k, ρ, T)
-# adapt(K::Kernel{D}; ϵ=K.ϵ, ρ=K.ρ, T=K.T) where {D} = Kernel(D, ϵ, ρ, T, K.orig)
