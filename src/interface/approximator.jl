@@ -55,7 +55,7 @@ _logpdfu(K::KernelRecipe, u::Float64) = logpdf(_density(K), u)
 "Ths Kernel object represents the conditional density function of the observed vs simulated datasets."
 struct Kernel{D, R, T, M} <: PosteriorApproximator{D, R, T}
     recipe::KernelRecipe{D, R, T}
-    model::M
+    model::M #! Should be posterior, not model.
     bandwidth::Float64
     transformed_summs::Vector{Float64}
 

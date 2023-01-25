@@ -1,7 +1,8 @@
 function adaptive_smc_sampler_MAD(mdl::ImplicitPosterior{M, P, S}, K::KernelRecipe{Uniform, D, T}, N::Integer;
                                   drop::Percentage=%(50), R₀=10, p_thresh=0.05, c=0.05) where {M, P, S, D, T}
     # Setup
-    π = prior(mdl)::P
+    π = prior(mdl)
+    sim_fn = simulator(mdl.bayesmodel)
 
     # Setup consts
     local N_drop::Int = drop(N)
@@ -63,7 +64,7 @@ function adaptive_smc_sampler_MAD(mdl::ImplicitPosterior{M, P, S}, K::KernelReci
                 prop_theta = theta + rand(q)
 
                 if randexp() ≥ (logpdf(π, theta) - logpdf(π, prop_theta))
-                    store_summ = prop_summ = rand(M(prop_theta...))
+                    store_summ = prop_summ = sim_fn(prop_theta)
                     prop_dist = distance(curr_K, prop_summ)
                     if isfinite(logpdfu(all_K, prop_summ))
                         theta, summ, dist = prop_theta, prop_summ, prop_dist

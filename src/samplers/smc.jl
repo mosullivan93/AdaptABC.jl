@@ -9,7 +9,7 @@
 function smc_sampler(post::ImplicitPosterior{M, P, S}, K::KernelRecipe{Uniform, D, T}, N::Integer,
     drop::Percentage=%(50), R₀=10, p_thresh=0.05, c=0.05) where {M, P, S, D, T}
     # Setup
-    π = prior(post)::P
+    π = prior(post)
 
     # Setup consts
     local N_drop::Int = drop(N)

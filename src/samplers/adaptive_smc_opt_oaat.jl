@@ -12,7 +12,7 @@ adaptive_smc_sampler_opt_oaat(post, K::KernelRecipe, N::Integer; drop::Percentag
 function adaptive_smc_sampler_opt_oaat(post::ImplicitPosterior{M, P, S}, K::KernelRecipe{Uniform, D, T}, N::Integer,
                                        drop::Percentage=%(50), R₀=10, p_thresh=0.05, c=0.05, k::Union{Int, Missing}=missing) where {M, P, S, D, T}
     # Setup
-    π = prior(post)::P
+    π = prior(post)
 
     # Setup consts
     local N_drop::Int = drop(N)

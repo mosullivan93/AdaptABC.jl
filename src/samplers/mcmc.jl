@@ -6,6 +6,7 @@ end
 
 function mcmc_sampler(mdl::ImplicitPosterior{M}, K::PosteriorApproximator{Uniform}, N::Integer, q::Distribution, init::NTuple{3, Vector{Float64}}) where {M}
     π = prior(mdl)
+    sim_fn = simulator(mdl.bayesmodel)
 
     θ = Array{eltype(π)}(undef, length(π), N)
     X = Array{eltype(mdl)}(undef, length(mdl), N)
@@ -22,7 +23,7 @@ function mcmc_sampler(mdl::ImplicitPosterior{M}, K::PosteriorApproximator{Unifor
         prop_theta = theta + rand(q)
 
         if randexp() ≥ (logpdf(π, theta) - logpdf(π, prop_theta))
-            prop_summ = rand(M(prop_theta...))
+            prop_summ = sim_fn(prop_theta)
             prop_dist = distance(K, prop_summ)
             if isfinite(logpdfu(K, prop_summ))
                 theta, summ, dist = prop_theta, prop_summ, prop_dist
@@ -38,6 +39,7 @@ end
 
 function mcmc_sampler(mdl::ImplicitPosterior{M}, K::PosteriorApproximator, N::Integer, q::Distribution, init::NTuple{3, Vector{Float64}}) where {M}
     π = prior(mdl)
+    sim_fn = simulator(mdl.bayesmodel)
 
     θ = Array{eltype(π)}(undef, length(π), N)
     X = Array{eltype(mdl)}(undef, length(mdl), N)
@@ -49,7 +51,7 @@ function mcmc_sampler(mdl::ImplicitPosterior{M}, K::PosteriorApproximator, N::In
     local acc::Int64 = 0
     for i in 1:N
         prop_theta = theta + rand(q)
-        prop_summ = rand(M(prop_theta...))
+        prop_summ = sim_fn(prop_theta)
         prop_dist = distance(K, prop_summ)
 
         if randexp() ≥ ((logpdfu(K, summ) + logpdf(π, theta)) - (logpdfu(K, prop_summ) + logpdf(π, prop_theta)))
@@ -69,7 +71,7 @@ function mcmc_sampler(post::ImplicitPosterior{M}, K::PosteriorApproximator, N::I
         theta, summ, dist = vecunpack(rejection_sampler(post, K, 1), Val(3))
     else
         theta = vec(θ₀)
-        summ = ismissing(X₀) ? rand(M(theta...)) : vec(X₀)
+        summ = ismissing(X₀) ? simulator(mdl.bayesmodel)(theta) : vec(X₀)
         dist = Float64[distance(K, summ)]
     end
 

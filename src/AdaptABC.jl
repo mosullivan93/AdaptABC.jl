@@ -10,6 +10,7 @@ using LinearAlgebra
 using Optim
 using Manifolds
 using Manopt
+using Bijectors
 
 export
     # The implicit model and associate algebraic tools
@@ -23,7 +24,9 @@ export
     summarise,
     simulate,
    
+    AbstractImplicitBayesianModel,
     ImplicitBayesianModel,
+    TransformedImplicitBayesianModel,
     ImplicitPosterior,
     PosteriorApproximator,
     Kernel,

@@ -16,7 +16,7 @@ adaptive_smc_sampler_opt_dfo(post, K::KernelRecipe, N::Integer; drop::Percentage
 function adaptive_smc_sampler_opt_dfo(post::ImplicitPosterior{M, P, S}, K::KernelRecipe{Uniform, D, T}, N::Int,
                                        drop::Percentage=%(50), R₀::Int=10, p_thresh::Float64=0.05, c::Float64=0.05, k::Union{Int, Missing}=missing) where {M, P, S, D, T}
     # Setup
-    π = prior(post)::P
+    π = prior(post)
 
     # Setup consts
     local N_drop::Int = drop(N)
