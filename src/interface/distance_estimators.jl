@@ -84,7 +84,11 @@ struct WeightedSampleBC <: BhattacharyyaCoefficient
         pairwise!(nus, euclidean, ps)
         nus[iszero.(nus)] .= Inf
         ndups = count(isinf, nus, dims=2)
-        sort!(nus, dims=1)
+        
+        for c in eachcol(nus)
+            sort!(c, Base.Sort.defalg(c), Base.Forward);
+            # sort!(c, Base.DEFAULT_STABLE, Base.Forward);
+        end
 
         lλs = log.(N .- ndups)
         lqs = logpdf.(q, ps)
@@ -105,9 +109,11 @@ evaluate(e::WeightedSampleBC, lws) = evaluate_biased(e, lws) + loggamma(e.k) - l
 
 struct SubsetSampleBC <: BhattacharyyaCoefficient
     # Pairwise distances in the full sample.
-    nus::Matrix{Float64}
+    # nus::Matrix{Float64}
+    nus::Matrix{Float32}
     # logpdf of the reference q at each point in the full sample
-    lqs::Vector{Float64}
+    # lqs::Vector{Float64}
+    lqs::Vector{Float32}
     # Number of samples
     N::Int
     # Dimension of the problem samples
@@ -120,15 +126,21 @@ struct SubsetSampleBC <: BhattacharyyaCoefficient
         N = pop!(sz)
         d = prod(sz) # Not sure if prod would make sense here
 
-        nus = zeros(Float64, (N, N))
+        nus = zeros(Float32, (N, N))
+        # nus = zeros(Float64, (N, N))
         pairwise!(nus, euclidean, ps)
         nus[iszero.(nus)] .= Inf
         
         lqs = logpdf.(q, ps)
 
         if ismissing(k)
+            nus_init = copy(nus);
+            for c in eachcol(nus_init)
+                sort!(c, Base.Sort.defalg(c), Base.Forward);
+                # sort!(c, 1, size(nus_init, 1), Base.QuickSort, Base.Forward);
+            end
             # adapting k will cost at least one sort operation.
-            k = adaptive_k(ps, sort(nus, dims=1))
+            k = adaptive_k(ps, nus_init)
         end
 
         return new(nus, lqs, N, d, k)
@@ -143,7 +155,9 @@ function evaluate_biased(e::SubsetSampleBC, idx)
     ndups = count(isinf, kept_nus, dims=2)
     lλs = log.(size(kept_nus, 2) .- ndups)
 
-    sort!(kept_nus, dims=1, alg=PartialQuickSort(e.k))
+    for c in eachcol(kept_nus)
+        sort!(c, 1, size(kept_nus, 1), PartialQuickSort(e.k), Base.Forward);
+    end
     lηs = log.(kept_nus[e.k, :])
 
     return logsumexp((e.lqs[idx] .+ lλs .+ e.d*lηs)/2)

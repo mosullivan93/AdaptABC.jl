@@ -1,3 +1,5 @@
+#! FIX MEDIAN. CONVERT TO OLCM.
+
 function adaptive_smc_sampler_MAD(mdl::ImplicitPosterior{M, P, S}, K::KernelRecipe{Uniform, D, T}, N::Integer;
                                   drop::Percentage=%(50), R₀=10, p_thresh=0.05, c=0.05) where {M, P, S, D, T}
     # Setup
@@ -16,15 +18,16 @@ function adaptive_smc_sampler_MAD(mdl::ImplicitPosterior{M, P, S}, K::KernelReci
     local X::Matrix{Float64}
     local ρ::Vector{Float64}
     local next_K::KernelRecipe{Uniform, D, ScalingTransform{1, S}}
-    local curr_K::Kernel{Uniform, D, ScalingTransform{1, S}, ImplicitPosterior{M, P, S}}
-    local all_K::ProductKernel{Uniform, D, ScalingTransform{1, S}, ImplicitPosterior{M, P, S}}
+    local curr_K::Kernel{Uniform, D, ScalingTransform{1, S}, typeof(mdl)}
+    local all_K::ProductKernel{Uniform, D, ScalingTransform{1, S}}
 
     # Compute an excess of particles to determine initial scaling.
     θ, X, ρ, curr_K = rejection_sampler(mdl, K, N)
     @show curr_K.bandwidth
     all_K = ProductKernel(curr_K)
     
-    next_K = revise(curr_K.recipe, t=ScalingTransform(vec(1 ./ median(abs.(X .- median(X, dims=2)), dims=2))))
+    # it's not keen on median...
+    next_K = revise(curr_K.recipe, t=ScalingTransform(vec(1 ./ median(abs.(X .- median(X, dims=2)), dims=2)), Val(S)))
 
     local q_cov::Matrix{Float64} = Matrix{Float64}(undef, length(π), length(π))
     local p_acc::Float64 = 1.0
@@ -51,50 +54,51 @@ function adaptive_smc_sampler_MAD(mdl::ImplicitPosterior{M, P, S}, K::KernelReci
 
         q_cov .= cov(θ[:, 1:N_move], dims=2)
         local accs = zeros(Int, N_move)
-        # todo: Convert to use 1:max_store_iters, adapt R, max_store_iters:R
-        local all_sims = zeros(Float64, length(mdl), N_move, min(max_store_iters, R))
-        q = MvNormal(q_cov)
+        local n_sims_stored = min(max_store_iters, R)
+        local all_sims = zeros(Float64, length(mdl), n_sims_stored)
+        local store_sims = Threads.Atomic{Bool}(true)
+        local saved_sims = Threads.Atomic{Int}(1)
+            
+        let R=R, all_K=all_K, q_cov=q_cov, store_sims=store_sims, n_sims_stored=n_sims_stored #, saved_sims=saved_sims
+            # for I = 1:N_move
+            Threads.@threads for I = 1:N_move
+                shuffle_θ, shuffle_X, shuffle_ρ, shuffle_moves, shuffle_uniq_sims = mcmc_sampler(mdl, all_K, R, MvNormal(q_cov); θ₀=θ[:, I], X₀=X[:, I], store_uniq_sims=store_sims[])
 
-        Threads.@threads for I = 1:N_move
-            theta = θ[:, I]
-            summ = X[:, I]
-            dist = ρ[I]
+                θ[:, I] .= shuffle_θ[:, end]
+                X[:, I] .= shuffle_X[:, end]
+                ρ[I] = last(shuffle_ρ)
+                accs[I] = shuffle_moves
 
-            for J = 1:R
-                prop_theta = theta + rand(q)
-
-                if randexp() ≥ (logpdf(π, theta) - logpdf(π, prop_theta))
-                    store_summ = prop_summ = sim_fn(prop_theta)
-                    prop_dist = distance(curr_K, prop_summ)
-                    if isfinite(logpdfu(all_K, prop_summ))
-                        theta, summ, dist = prop_theta, prop_summ, prop_dist
-                        accs[I] += 1
+                if store_sims[]
+                    # How many uniques did we get back (matters for early rejection)
+                    nuniq = size(shuffle_uniq_sims, 2)
+                    # What's the next index we need to place them?
+                    next_ins_idx = Threads.atomic_add!(saved_sims, nuniq)
+                    # Did the last update take us to the end?
+                    if next_ins_idx < n_sims_stored
+                        # Minimum of how many slots are left vs how many are we adding
+                        n_summs_ins = min(n_sims_stored - next_ins_idx + 1, nuniq)
+                        # Insert the necessary number of summaries to the records
+                        all_sims[:, next_ins_idx:(next_ins_idx+n_summs_ins-1)] = shuffle_uniq_sims[:, 1:n_summs_ins]
+                    else
+                        # Update the flag that we've stored enough.
+                        store_sims[] = false
                     end
-                else
-                    # Keep the existing statistics if we jump outside of the prior
-                    store_summ = summ
-                end
-
-                if J <= max_store_iters
-                    all_sims[:, I, J] = store_summ
                 end
             end
-
-            θ[:, I] .= theta
-            X[:, I] .= summ
-            ρ[I] = dist
         end
         final_iter && break
         @show p_acc = sum(accs)/(R*N_move)
         @show R = max(1, ceil(Int, log(1-p_acc, c)))
         
-        all_sims = reshape(all_sims, (length(mdl), :))
-        next_K = revise(curr_K.recipe, t=ScalingTransform(vec(1 ./ median(abs.(all_sims .- median(all_sims, dims=2)), dims=2))))
+        n_sims_stored = min(n_sims_stored, saved_sims[])
+        mads = median(abs.(all_sims[:, 1:n_sims_stored] .- median(all_sims[:, 1:n_sims_stored], dims=2)), dims=2)
+        next_K = revise(curr_K.recipe, t=ScalingTransform(vec(1 ./ mads), Val(S)))
 
         idx = sortperm(ρ)
-        θ = θ[:, idx]
-        X = X[:, idx]
-        ρ = ρ[idx]
+        θ .= θ[:, idx]
+        X .= X[:, idx]
+        ρ .= ρ[idx]
 
         @show mean(θ, dims=2)
         @show var(θ, dims=2)

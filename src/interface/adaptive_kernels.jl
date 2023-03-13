@@ -9,7 +9,7 @@ function find_incremental_weights(post::ImplicitPosterior, kr::KernelRecipe, xs:
         ub *= 1.1
     end
 
-    res = optimize(x -> abs(ess(_pdfu.(kr, dists/x)) - target_ess), 0.0, ub)
+    res = Optim.optimize(x -> abs(ess(_pdfu.(kr, dists/x)) - target_ess), 0.0, ub)
     res = Optim.minimizer(res)
     return res
 end

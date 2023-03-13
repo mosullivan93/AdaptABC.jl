@@ -62,8 +62,10 @@ Bijectors.invlink(m::TransformedImplicitBayesianModel, y) = inverse(m.transform)
 
 "An implicit bayesian model where the observed data has been specified."
 #! todo: test when this was the abstraction again... seems like it worked.
-struct ImplicitPosterior{M, P, S} <: Distribution{Multivariate, Continuous}
-    bayesmodel::Union{ImplicitBayesianModel{M, P}, TransformedImplicitBayesianModel{M, P}} #! fix this for type stability. Shouldn't be Abstract.
+# struct ImplicitPosterior{M, P, S} <: Distribution{Multivariate, Continuous}
+struct ImplicitPosterior{M, P, S, ModelType} <: Distribution{Multivariate, Continuous}
+    bayesmodel::ModelType #! fix this for type stability. Shouldn't be Abstract.
+    # bayesmodel::Union{ImplicitBayesianModel{M, P}, TransformedImplicitBayesianModel{M, P}} #! fix this for type stability. Shouldn't be Abstract.
     # bayesmodel::AbstractImplicitBayesianModel{M, P} #! fix this for type stability. Shouldn't be Abstract.
     # observed_data won't be type stable but shouldn't be accessed often.
     observed_data::Union{Missing, Array{Float64}}
@@ -76,7 +78,8 @@ struct ImplicitPosterior{M, P, S} <: Distribution{Multivariate, Continuous}
         else
             ismissing(obs_data) || @warn("This constructor does not validate that summarise(obs_data) is equal to obs_summs.")
         end
-        return new{M, P, length(obs_summs)}(bm, obs_data, obs_summs)
+        return new{M, P, length(obs_summs), typeof(bm)}(bm, obs_data, obs_summs)
+        # return new{M, P, length(obs_summs)}(bm, obs_data, obs_summs)
     end
 end
 ImplicitPosterior(m::Type{M}, p::Distribution; kwargs...) where {M <: ImplicitDistribution} = ImplicitPosterior(ImplicitBayesianModel(m, p); kwargs...)

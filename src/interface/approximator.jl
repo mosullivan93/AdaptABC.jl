@@ -83,10 +83,10 @@ logpdfu(K::Kernel, summ_x) = _logpdfu(K, distance(K, summ_x))
 Distributions.pdf(K::Kernel, summ_x) = pdfu(K, summ_x)/K.bandwidth
 Distributions.logpdf(K::Kernel, summ_x) = logpdfu(K, summ_x) - log(K.bandwidth)
 
-function pa_length(K::Kernel{D, R, T, ImplicitPosterior{M, P, S}} where {D, R, T, M, P}) where {S}
+function pa_length(K::Kernel{D, R, T, <:ImplicitPosterior{M, P, S}} where {D, R, T, M, P}) where {S}
     # Using observed_summs because eventually will support transformation matrices that lower the dimension.
     pas = Vector{Float64}(undef, S)
-    # The eigenvalues/eigenvectors will be from W.W' so should still be the correct shape.
+    # The eigenvalues/eigenvectors will be from W'.W so should still be the correct shape.
     pas .= pa_length(K.recipe.transform, K.bandwidth)
     return pas
 end

@@ -1,29 +1,104 @@
-#? Using Manopt's DFO methods - NM is good, PSO is very slow but can work better with enough particles.
+# # ? Using Manopt's DFO methods - NM is good, PSO is very slow but can work better with enough particles.
+function choose_weights_dfo(post::ImplicitPosterior{M, P, S} where {M, P}, K::KernelRecipe{Uniform}, th::AbstractMatrix, xs::AbstractMatrix, N_keep::Integer, k::Union{Int, Missing}=missing) where {S}
+    # M = Manifolds.Sphere(Val(S - 1))
+    M = Manifolds.ProbabilitySimplex(Val(S-1))
+    rp = randperm(S)
+    adaptive_estimator = AdaptiveKernelEstimator(SubsetSampleBC, post, th, xs, K, N_keep; k=k)
+    # adaptive_estimator = AdaptiveKernelEstimator(WeightedSampleBC, post, th, xs, K, N_keep; k=k)
+    scales = vec(std(xs, dims=2))
+
+    man_obj(::AbstractManifold, p) = first(logestb(adaptive_estimator, ScalingTransform(p[rp]./scales, Val(S))))
+    # mopt_res = Manopt.NelderMead(M, man_obj, NelderMeadSimplex(collect(eachrow(diagm(ones(S))))))
+    mopt_res = Manopt.NelderMead(M, man_obj)
+    # mopt_res = particle_swarm(M, man_obj, n=500)
+    # mopt_res = particle_swarm(M, man_obj)
+    return logestb(adaptive_estimator, ScalingTransform(mopt_res[rp]./scales, Val(S)))
+    # return logestb(adaptive_estimator, ScalingTransform(abs.(mopt_res)./scales, Val(S)))
+end
+
+# ? Spherical Surrogate + Manifold PSO
 # function choose_weights_dfo(post::ImplicitPosterior{M, P, S} where {M, P}, K::KernelRecipe{Uniform}, th::AbstractMatrix, xs::AbstractMatrix, N_keep::Integer, k::Union{Int, Missing}=missing) where {S}
-#     M = Manifolds.Sphere(Val(S - 1))
 #     adaptive_estimator = AdaptiveKernelEstimator(SubsetSampleBC, post, th, xs, K, N_keep; k=k)
+#     # This would **HEAVILY** depend on the quality of the surrogate... maybe need a lot more points.
+#     surr = build_spherical_surrogate(post, th, xs, adaptive_estimator; n_pts=S*100)
+#     # surr = build_spherical_surrogate(post, th, xs, adaptive_estimator; n_pts=S*100)
 #     # adaptive_estimator = AdaptiveKernelEstimator(WeightedSampleBC, post, th, xs, K, N_keep; k=k)
 #     scales = vec(std(xs, dims=2))
 
-#     man_obj(::AbstractManifold, p) = first(logestb(adaptive_estimator, ScalingTransform(p./scales)))
-#     mopt_res = Manopt.NelderMead(M, man_obj, NelderMeadSimplex(collect(eachrow(diagm(ones(S))))))
-#     # mopt_res = Manopt.NelderMead(M, man_obj)
-#     # mopt_res = particle_swarm(M, man_obj, n=500)
-#     # mopt_res = particle_swarm(M, man_obj)
+#     man_obj(::AbstractManifold, p) = surr(p)
+#     mopt_res = Manopt.NelderMead(Sphere(Val(S-1)), man_obj, NelderMeadSimplex(collect(eachrow(diagm(ones(S))))))
+#     # mopt_res = Manopt.NelderMead(Sphere(Val(S-1)), man_obj)
+#     # mopt_res = particle_swarm(Sphere(Val(S-1)), man_obj, n=500)
+#     # mopt_res = particle_swarm(Sphere(Val(S-1)), man_obj)
 #     return logestb(adaptive_estimator, ScalingTransform(abs.(mopt_res)./scales, Val(S)))
 # end
 
-# #? Using my bayesion optimisation on a sphere method.
-function choose_weights_dfo(post::ImplicitPosterior{M, P, S} where {M, P}, K::KernelRecipe{Uniform}, th::AbstractMatrix, xs::AbstractMatrix, N_keep::Integer, k::Union{Int, Missing}=missing) where {S}
-    adaptive_estimator = AdaptiveKernelEstimator(SubsetSampleBC, post, th, xs, K, N_keep; k=k)
-    surr = build_spherical_surrogate(post, th, xs, adaptive_estimator; n_pts=S+100)
-    scales = vec(std(xs, dims=2))
-    surrsphereopt_direct(p -> first(logestb(adaptive_estimator, ScalingTransform(p./scales, Val(length(post))))), surr)
-    # surrsphereopt(p -> first(logestb(adaptive_estimator, ScalingTransform(p./scales, Val(length(post))))), surr)
-    # bayessphereopt(p -> first(logestb(adaptive_estimator, ScalingTransform(p./scales, Val(length(post))))), surr)
+#? Custom Manifold Differential Evolution.
+# function choose_weights_dfo(post::ImplicitPosterior{M, P, S} where {M, P}, K::KernelRecipe{Uniform}, th::AbstractMatrix, xs::AbstractMatrix, N_keep::Integer, k::Union{Int, Missing}=missing) where {S}
+#     # man = Manifolds.Sphere(Val(S-1))
+#     man = Manifolds.ProbabilitySimplex(Val(S-1))
+#     rp = randperm(S)
+#     adaptive_estimator = AdaptiveKernelEstimator(SubsetSampleBC, post, th, xs, K, N_keep; k=k)
+#     scales = vec(std(xs, dims=2))
+    
+#     man_obj(p) = first(logestb(adaptive_estimator, ScalingTransform(p[rp]./scales, Val(S))))
+#     # opt_res = manifold_diffevo(man, man_obj, 200, 50)
+#     opt_res = manifold_diffevo(man, man_obj, 500, 100)
+#     # opt_res = manifold_diffevo(man, man_obj, 100, 100)
+#     return logestb(adaptive_estimator, ScalingTransform(opt_res[rp]./scales, Val(S)))
 
-    return logestb(adaptive_estimator, ScalingTransform(surr.x[argmin(surr.y)]./scales, Val(S)))
-end
+#     # man_obj(p) = first(logestb(adaptive_estimator, ScalingTransform(p[rp]./scales)))
+#     # opt_res = abs.(manifold_diffevo(man, man_obj, 100, 100))
+#     # opt_res = abs.(manifold_diffevo(man, man_obj; niters=1000, n_pop=S*20))
+#     # opt_res = abs.(manifold_diffevo(man, man_obj; pt_per_dim=10))
+#     # return logestb(adaptive_estimator, ScalingTransform(opt_res[rp]./scales, Val(S)))
+# end
+
+# #? Using my bayesion optimisation on a sphere method.
+# function choose_weights_dfo(post::ImplicitPosterior{M, P, S} where {M, P}, K::KernelRecipe{Uniform}, th::AbstractMatrix, xs::AbstractMatrix, N_keep::Integer, k::Union{Int, Missing}=missing) where {S}
+#     adaptive_estimator = AdaptiveKernelEstimator(SubsetSampleBC, post, th, xs, K, N_keep; k=k)
+#     surr = build_spherical_surrogate(post, th, xs, adaptive_estimator; n_pts=S+100)
+#     # surr = build_spherical_surrogate_bs(post, th, xs, adaptive_estimator; n_pts=S*20)
+#     scales = vec(std(xs, dims=2))
+#     opt_res = manifold_surrogate_opt_hybrid(Manifolds.Sphere(Val(S-1)), p -> first(logestb(adaptive_estimator, ScalingTransform(p./scales, Val(length(post))))), surr)
+#     return logestb(adaptive_estimator, ScalingTransform(opt_res./scales, Val(S)))
+# end
+
+# #? Using my bayesion optimisation on a sphere method.
+# function choose_weights_dfo(post::ImplicitPosterior{M, P, S} where {M, P}, K::KernelRecipe{Uniform}, th::AbstractMatrix, xs::AbstractMatrix, N_keep::Integer, k::Union{Int, Missing}=missing) where {S}
+#     adaptive_estimator = AdaptiveKernelEstimator(SubsetSampleBC, post, th, xs, K, N_keep; k=k)
+#     # surr = build_spherical_surrogate(post, th, xs, adaptive_estimator; n_pts=S+100)
+#     surr = build_spherical_surrogate_bs(post, th, xs, adaptive_estimator; n_pts=S*20)
+#     scales = vec(std(xs, dims=2))
+#     # manifold_surrogate_opt_direct(Manifolds.Sphere(Val(S-1)), p -> first(logestb(adaptive_estimator, ScalingTransform(p./scales, Val(length(post))))), surr; maxiters=1)
+#     manifold_surrogate_opt_ei(Manifolds.Sphere(Val(S-1)), p -> first(logestb(adaptive_estimator, ScalingTransform(p./scales, Val(length(post))))), surr)
+#     # surrsphereopt(p -> first(logestb(adaptive_estimator, ScalingTransform(p./scales, Val(length(post))))), surr)
+#     # bayessphereopt(p -> first(logestb(adaptive_estimator, ScalingTransform(p./scales, Val(length(post))))), surr)
+
+#     @show surr.x[argmin(surr.y)]
+#     return logestb(adaptive_estimator, ScalingTransform(surr.x[argmin(surr.y)]./scales, Val(S)))
+# end
+
+#? SphericalSurrogate + BlackBoxOptim
+# function choose_weights_dfo(post::ImplicitPosterior{M, P, S} where {M, P}, K::KernelRecipe{Uniform}, th::AbstractMatrix, xs::AbstractMatrix, N_keep::Integer, k::Union{Int, Missing}=missing) where {S}
+#     adaptive_estimator = AdaptiveKernelEstimator(SubsetSampleBC, post, th, xs, K, N_keep; k=k)
+#     # This would **HEAVILY** depend on the quality of the surrogate... maybe need a lot more points.
+#     surr = build_spherical_surrogate(post, th, xs, adaptive_estimator; n_pts=S*100)
+#     # adaptive_estimator = AdaptiveKernelEstimator(WeightedSampleBC, post, th, xs, K, N_keep; k=k)
+#     scales = vec(std(xs, dims=2))
+
+#     obj(ϕ) = surr(Ω(ϕ))
+#     bbres = bboptimize(obj;
+#                     SearchRange = fill((0.0, pi/2), S-1),
+#                     NumDimensions = S-1,
+#                     NThreads = Threads.nthreads()-1,
+#                     Method = :adaptive_de_rand_1_bin_radiuslimited,
+#                     # Method = :dxnes,
+#                     TraceMode = :silent
+#                 )
+#     res = Ω(best_candidate(bbres))
+#     return logestb(adaptive_estimator, ScalingTransform(res./scales, Val(S)))
+# end
 
 #? Using BlackBoxOptim - Best so far, parallelised.
 # function choose_weights_dfo(post::ImplicitPosterior{M, P, S} where {M, P}, K::KernelRecipe{Uniform}, th::AbstractMatrix, xs::AbstractMatrix, N_keep::Integer, k::Union{Int, Missing}=missing) where {S}
@@ -32,11 +107,15 @@ end
 #     scales = vec(std(xs, dims=2))
 
 #     obj(ϕ) = first(logestb(adaptive_estimator, ScalingTransform(Ω(ϕ)./scales)))
+#     # bbres = bboptimize(obj, Ω⁻¹(ones(S));
 #     bbres = bboptimize(obj;
 #                     SearchRange = fill((0.0, pi/2), S-1),
 #                     NumDimensions = S-1,
 #                     NThreads = Threads.nthreads()-1,
-#                     Method = :dxnes,
+#                     Method = :adaptive_de_rand_1_bin_radiuslimited,
+#                     # MaxSteps = max(1e4, S*1000),
+#                     # Method = :dxnes,
+#                     # PopulationSize = 1000,
 #                     TraceMode = :silent
 #                 )
 #     res = Ω(best_candidate(bbres))
@@ -121,8 +200,8 @@ function adaptive_smc_sampler_opt_dfo(post::ImplicitPosterior{M, P, S}, K::Kerne
     local θ::Matrix{Float64}
     local X::Matrix{Float64}
     local ρ::Vector{Float64}
-    local curr_K::Kernel{Uniform, D, ScalingTransform{1, S}, ImplicitPosterior{M, P, S}}
-    local all_K::ProductKernel{Uniform, D, ScalingTransform{1, S}, ImplicitPosterior{M, P, S}}
+    local curr_K::Kernel{Uniform, D, ScalingTransform{1, S}, typeof(post)}
+    local all_K::ProductKernel{Uniform, D, ScalingTransform{1, S}, typeof(post)}
     local pas::Vector{Float64} = Vector{Float64}(undef, S)
 
     # Compute an excess of particles to determine initial scaling.
@@ -181,8 +260,8 @@ function adaptive_smc_sampler_opt_dfo(post::ImplicitPosterior{M, P, S}, K::Kerne
         local oobs = zeros(Int, N_move)
         let R=R, all_K=all_K, covs=covs
         # let R=R, all_K=all_K
-            # Threads.@threads for I = 1:N_move
-            for I = 1:N_move
+            Threads.@threads for I = 1:N_move
+            # for I = 1:N_move
                 shuffle_θ, shuffle_X, shuffle_ρ, shuffle_moves, shuffle_bnds = mcmc_sampler(post, all_K, R, MvNormal(covs[I]/2); θ₀=θ[:, I], X₀=X[:, I])
                 # shuffle_θ, shuffle_X, shuffle_ρ, shuffle_moves, shuffle_bnds = mcmc_sampler(post, all_K, R, MvNormal(q_cov); θ₀=θ[:, I], X₀=X[:, I])
 
@@ -190,7 +269,7 @@ function adaptive_smc_sampler_opt_dfo(post::ImplicitPosterior{M, P, S}, K::Kerne
                 X[:, I] .= shuffle_X[:, end]
                 ρ[I] = last(shuffle_ρ)
                 accs[I] = shuffle_moves
-                oobs[I] = shuffle_bnds
+                # oobs[I] = shuffle_bnds
             end
         end
         final_iter && break
