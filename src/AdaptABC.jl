@@ -12,6 +12,10 @@ using Manifolds
 import ManifoldsBase
 using Manopt
 using Bijectors
+import ManifoldDiff
+import FiniteDifferences
+
+# probably can remove these:
 import BlackBoxOptim: bboptimize, best_candidate
 import LineSearches
 import QuasiMonteCarlo
@@ -19,8 +23,6 @@ using Surrogates
 using AbstractGPs
 using SurrogatesAbstractGPs
 import Zygote
-import ManifoldDiff
-import FiniteDifferences
 
 export
     # The implicit model and associate algebraic tools
