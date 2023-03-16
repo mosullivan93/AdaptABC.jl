@@ -12,6 +12,7 @@ using Manifolds
 import ManifoldsBase
 using Manopt
 using Bijectors
+using DataStructures
 import ManifoldDiff
 import FiniteDifferences
 
@@ -64,8 +65,18 @@ export
     WeightedSampleBC,
     SubsetSampleBC,
     AdaptiveKernelEstimator,
-    est, estb, logest, logestb
+    est, estb, logest, logestb,
 
+    # Particle functions
+    param, summ, dist,
+
+    # Generic algorithm building blocks
+    AdaptiveSMCABCState,
+    adaptive_smc_generic,
+    BandwidthOnlyAdaptation, ScaleReciprocal, OneAtATime,
+    ManifoldQuasiNewton, ManifoldGradientDescent,
+    ManifoldNelderMead, ManifoldDifferentialEvolution,
+    GlobalCovariance, LocalCovariance
 
 # Fix broadcasting of pdf, logpdf (read: type piracy)
 Broadcast.broadcastable(d::Distribution) = Ref(d)

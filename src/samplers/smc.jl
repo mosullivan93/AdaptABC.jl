@@ -18,16 +18,13 @@ function smc_sampler(post::ImplicitPosterior{M, P, S}, K::KernelRecipe{Uniform, 
     local R::Int = R₀
     
     # Initialise particles
-    local θ::Matrix{Float64}
-    local oθ::Matrix{Float64}
-    local X::Matrix{Float64}
-    local ρ::Vector{Float64}
-    local curr_K::Kernel{Uniform, D, T, ImplicitPosterior{M, P, S}}
+    local parts::Vector{Particle}
+    local curr_K::Kernel{Uniform, D, T, typeof(post)}
 
     #* always sorted by this method
-    θ, X, ρ, curr_K = rejection_sampler(post, K, N)
+    parts, curr_K = rejection_sampler(post, K, N)
     @show curr_K.bandwidth
-    oθ = similar(θ)
+    local oθ = Matrix{Float64}(undef, length(post), N)
 
     local q_cov::Matrix{Float64} = Matrix{Float64}(undef, length(π), length(π))
     local p_acc::Float64 = 1.0
@@ -38,23 +35,19 @@ function smc_sampler(post::ImplicitPosterior{M, P, S}, K::KernelRecipe{Uniform, 
         else
             #* Put kept samples at end and iterate 1:N_drop
             resample_idx = vcat(rand(1:N_keep, N_drop), 1:N_keep)
-            θ .= θ[:, resample_idx]
-            X .= X[:, resample_idx]
-            ρ .= ρ[resample_idx]
+            parts .= parts[resample_idx]
 
-            curr_K = revise(curr_K, ϵ=last(ρ))
+            curr_K = revise(curr_K, ϵ=dist(last(parts)))
             @show curr_K.bandwidth
         end
 
-        q_cov .= cov(θ[:, 1:N_move], dims=2)
+        q_cov .= cov(param(parts[1:N_move]), dims=2)
         local accs = zeros(Int, N_move)
         let R=R, curr_K=curr_K
             Threads.@threads for I = 1:N_move
-                shuffle_θ, shuffle_X, shuffle_ρ, shuffle_moves = mcmc_sampler(post, curr_K, R, MvNormal(q_cov); θ₀=θ[:, I], X₀=X[:, I])
+                shuffle_parts, shuffle_moves = mcmc_sampler(post, curr_K, R, MvNormal(q_cov), parts[I])
 
-                θ[:, I] .= shuffle_θ[:, end]
-                X[:, I] .= shuffle_X[:, end]
-                ρ[I] = last(shuffle_ρ)
+                parts[I] = last(shuffle_parts)
                 accs[I] = shuffle_moves
             end
         end
@@ -63,24 +56,20 @@ function smc_sampler(post::ImplicitPosterior{M, P, S}, K::KernelRecipe{Uniform, 
         R = ceil(Int, log(1-p_acc, c))
         @show p_acc, R
 
-        idx = sortperm(ρ)
-        θ .= θ[:, idx]
-        X .= X[:, idx]
-        ρ .= ρ[idx]
+        sort!(parts, by=dist);
 
         if π isa Bijectors.TransformedDistribution
-            oθ .= invlink(post.bayesmodel, θ)
-            @show mean(oθ, dims=2)
-            @show var(oθ, dims=2)
+            oθ .= invlink(post.bayesmodel, param(parts))
         else
-            @show mean(θ, dims=2)
-            @show var(θ, dims=2)
+            oθ .= param(parts)
         end
+        @show mean(oθ, dims=2)
+        @show var(oθ, dims=2)
 
         final_iter = p_acc < p_thresh
     end
 
-    return (θ, X, ρ, curr_K)
+    return (parts, curr_K)
 end
 
 ## Non-uniform kernels

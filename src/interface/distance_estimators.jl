@@ -192,9 +192,12 @@ end
 
 for fn in [:est, :estb, :logest, :logestb]
     eval(quote
-        function $(fn)(ake::AdaptiveKernelEstimator, tx::AbstractTransform)
+        function $(fn)(ake::AdaptiveKernelEstimator, ws::VecOrMat{Float64})
+            tx = ScalingTransform(ws, Val(length(ake.post)))
             (e, k, i) = est_inputs(ake, tx)
-            return ($(fn)(e, i), k, i)
+            return $(fn)(e, i)
+            # return ($(fn)(e, i), k, i)
+            # estimated distance using a given adaptive kernel estimator, the learned kernel, and the inputs for the estimator (corresponding to either weights or bitmask)
         end
     end)
 end

@@ -61,7 +61,7 @@ struct Kernel{D, R, T, M} <: PosteriorApproximator{D, R, T}
 
     function Kernel(m::ImplicitPosterior, ϵ::Float64, r::KernelRecipe{D, R, T}) where {D <: SupportedKernelDistributions, R <: SemiMetric, T <: AbstractTransform}
         ϵ ≥ 0 || error("Cannot have negative tolerance for posterior approximator.")
-        isinf(ϵ) && @warn("Using an infinite tolerance can cause unexpected behaviour.")
+        isinf(ϵ) && @warn("Using an infinite tolerance can cause unexpected behaviour.", maxlog=1)
         return new{D, R, T, typeof(m)}(r, m, ϵ, r.transform(m.observed_summs))
     end
 end
@@ -72,6 +72,8 @@ Base.convert(::Type{Kernel{D, R, Tto, M}}, k::Kernel{D, R, Tfrom, M}) where {D, 
 
 # Compute the distance of a simulation from the model with this kernel
 distance(K::Kernel, summ_x) = _distance(K.recipe, K.transformed_summs, K.recipe.transform(summ_x))
+# Get the recipe of the kernel
+recipe(K::Kernel) = K.recipe
 
 # Perform the rescaling of a distance with the bandwidth and evaluate the recipe pdf.
 _pdfu(K::Kernel, u::Real) = _pdfu(K.recipe, u/K.bandwidth)
@@ -98,8 +100,9 @@ ProductKernel(ks::(Kernel{D, R, T, M})...) where {D, R, T, M} = ProductKernel(re
 ProductKernel(PK::ProductKernel{D, R, T, M}, K::Kernel{D, R, T, M}) where {D, R, T, M} = ProductKernel(vcat(PK.kernels, K))
 pa_length(PK::ProductKernel) = accumulate(min, transpose(hcat(pa_length.(PK.kernels)...)), dims=1)
 
-# Default the distance on the product kernel to use the most recently added kernel
+# Default the distance/recipe on the product kernel to use the most recently added kernel
 distance(K::ProductKernel, summ_x) = distance(last(K.kernels), summ_x)
+recipe(K::ProductKernel) = recipe(last(K.kernels))
 
 # Normalised (log)pdf using product kernel can't be easily calculated
 Distributions.pdf(::ProductKernel, _) = error("Exact evaluation of pdf of product kernel not possible, use unnormalised density.")

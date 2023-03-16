@@ -1,20 +1,20 @@
 # # ? Using Manopt's DFO methods - NM is good, PSO is very slow but can work better with enough particles.
-function choose_weights_dfo(post::ImplicitPosterior{M, P, S} where {M, P}, K::KernelRecipe{Uniform}, th::AbstractMatrix, xs::AbstractMatrix, N_keep::Integer, k::Union{Int, Missing}=missing) where {S}
-    # M = Manifolds.Sphere(Val(S - 1))
-    M = Manifolds.ProbabilitySimplex(Val(S-1))
-    rp = randperm(S)
-    adaptive_estimator = AdaptiveKernelEstimator(SubsetSampleBC, post, th, xs, K, N_keep; k=k)
-    # adaptive_estimator = AdaptiveKernelEstimator(WeightedSampleBC, post, th, xs, K, N_keep; k=k)
-    scales = vec(std(xs, dims=2))
+# function choose_weights_dfo(post::ImplicitPosterior{M, P, S} where {M, P}, K::KernelRecipe{Uniform}, th::AbstractMatrix, xs::AbstractMatrix, N_keep::Integer, k::Union{Int, Missing}=missing) where {S}
+#     # M = Manifolds.Sphere(Val(S - 1))
+#     M = Manifolds.ProbabilitySimplex(Val(S-1))
+#     rp = randperm(S)
+#     adaptive_estimator = AdaptiveKernelEstimator(SubsetSampleBC, post, th, xs, K, N_keep; k=k)
+#     # adaptive_estimator = AdaptiveKernelEstimator(WeightedSampleBC, post, th, xs, K, N_keep; k=k)
+#     scales = vec(std(xs, dims=2))
 
-    man_obj(::AbstractManifold, p) = first(logestb(adaptive_estimator, ScalingTransform(p[rp]./scales, Val(S))))
-    # mopt_res = Manopt.NelderMead(M, man_obj, NelderMeadSimplex(collect(eachrow(diagm(ones(S))))))
-    mopt_res = Manopt.NelderMead(M, man_obj)
-    # mopt_res = particle_swarm(M, man_obj, n=500)
-    # mopt_res = particle_swarm(M, man_obj)
-    return logestb(adaptive_estimator, ScalingTransform(mopt_res[rp]./scales, Val(S)))
-    # return logestb(adaptive_estimator, ScalingTransform(abs.(mopt_res)./scales, Val(S)))
-end
+#     man_obj(::AbstractManifold, p) = first(logestb(adaptive_estimator, ScalingTransform(p[rp]./scales, Val(S))))
+#     # mopt_res = Manopt.NelderMead(M, man_obj, NelderMeadSimplex(collect(eachrow(diagm(ones(S))))))
+#     mopt_res = Manopt.NelderMead(M, man_obj)
+#     # mopt_res = particle_swarm(M, man_obj, n=500)
+#     # mopt_res = particle_swarm(M, man_obj)
+#     return logestb(adaptive_estimator, ScalingTransform(mopt_res[rp]./scales, Val(S)))
+#     # return logestb(adaptive_estimator, ScalingTransform(abs.(mopt_res)./scales, Val(S)))
+# end
 
 # ? Spherical Surrogate + Manifold PSO
 # function choose_weights_dfo(post::ImplicitPosterior{M, P, S} where {M, P}, K::KernelRecipe{Uniform}, th::AbstractMatrix, xs::AbstractMatrix, N_keep::Integer, k::Union{Int, Missing}=missing) where {S}
@@ -34,25 +34,25 @@ end
 # end
 
 #? Custom Manifold Differential Evolution.
-# function choose_weights_dfo(post::ImplicitPosterior{M, P, S} where {M, P}, K::KernelRecipe{Uniform}, th::AbstractMatrix, xs::AbstractMatrix, N_keep::Integer, k::Union{Int, Missing}=missing) where {S}
-#     # man = Manifolds.Sphere(Val(S-1))
-#     man = Manifolds.ProbabilitySimplex(Val(S-1))
-#     rp = randperm(S)
-#     adaptive_estimator = AdaptiveKernelEstimator(SubsetSampleBC, post, th, xs, K, N_keep; k=k)
-#     scales = vec(std(xs, dims=2))
+function choose_weights_dfo(post::ImplicitPosterior{M, P, S} where {M, P}, K::KernelRecipe{Uniform}, th::AbstractMatrix, xs::AbstractMatrix, N_keep::Integer, k::Union{Int, Missing}=missing) where {S}
+    # man = Manifolds.Sphere(Val(S-1))
+    man = Manifolds.ProbabilitySimplex(Val(S-1))
+    rp = randperm(S)
+    adaptive_estimator = AdaptiveKernelEstimator(SubsetSampleBC, post, th, xs, K, N_keep; k=k)
+    scales = vec(std(xs, dims=2))
     
-#     man_obj(p) = first(logestb(adaptive_estimator, ScalingTransform(p[rp]./scales, Val(S))))
-#     # opt_res = manifold_diffevo(man, man_obj, 200, 50)
-#     opt_res = manifold_diffevo(man, man_obj, 500, 100)
-#     # opt_res = manifold_diffevo(man, man_obj, 100, 100)
-#     return logestb(adaptive_estimator, ScalingTransform(opt_res[rp]./scales, Val(S)))
+    man_obj(p) = first(logestb(adaptive_estimator, ScalingTransform(p[rp]./scales, Val(S))))
+    # opt_res = manifold_diffevo(man, man_obj, 200, 50)
+    opt_res = manifold_diffevo(man, man_obj, 500, 100)
+    # opt_res = manifold_diffevo(man, man_obj, 100, 100)
+    return logestb(adaptive_estimator, ScalingTransform(opt_res[rp]./scales, Val(S)))
 
-#     # man_obj(p) = first(logestb(adaptive_estimator, ScalingTransform(p[rp]./scales)))
-#     # opt_res = abs.(manifold_diffevo(man, man_obj, 100, 100))
-#     # opt_res = abs.(manifold_diffevo(man, man_obj; niters=1000, n_pop=S*20))
-#     # opt_res = abs.(manifold_diffevo(man, man_obj; pt_per_dim=10))
-#     # return logestb(adaptive_estimator, ScalingTransform(opt_res[rp]./scales, Val(S)))
-# end
+    # man_obj(p) = first(logestb(adaptive_estimator, ScalingTransform(p[rp]./scales)))
+    # opt_res = abs.(manifold_diffevo(man, man_obj, 100, 100))
+    # opt_res = abs.(manifold_diffevo(man, man_obj; niters=1000, n_pop=S*20))
+    # opt_res = abs.(manifold_diffevo(man, man_obj; pt_per_dim=10))
+    # return logestb(adaptive_estimator, ScalingTransform(opt_res[rp]./scales, Val(S)))
+end
 
 # #? Using my bayesion optimisation on a sphere method.
 # function choose_weights_dfo(post::ImplicitPosterior{M, P, S} where {M, P}, K::KernelRecipe{Uniform}, th::AbstractMatrix, xs::AbstractMatrix, N_keep::Integer, k::Union{Int, Missing}=missing) where {S}

@@ -60,6 +60,7 @@ end
 # Other includes
 include("./intractable_density_term.jl")
 include("./model.jl")
+include("./particle.jl")
 include("./kernel_transforms.jl")
 include("./approximator.jl")
 include("./distance_estimators.jl")

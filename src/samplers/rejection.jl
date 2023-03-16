@@ -1,80 +1,61 @@
 # The "recipe" methods are those that perform an adaptive sampling step.
 function _rejection(mdl::ImplicitPosterior, K::KernelRecipe{Uniform}, N, keep=N)
-    θ = Array{eltype(prior(mdl))}(undef, length(prior(mdl)), N)
-    X = Array{eltype(mdl)}(undef, length(mdl), N)
+    parts = Vector{Particle}(undef, N)
 
     Threads.@threads for i = 1:N
         (theta, xs) = rand(mdl.bayesmodel)
-        θ[:, i] .= theta
-        X[:, i] .= xs
+        parts[i] = Particle(theta, xs, distance(K, mdl, xs))
     end
-    ρ = distance.(K, mdl, eachcol(X))
+    idx = partialsortperm(dist.(parts), 1:keep);
 
-    idx = getindex(sortperm(ρ), 1:keep)
-    return (θ[:, idx], X[:, idx], ρ[idx], Kernel(mdl, ρ[last(idx)], K))
+    return (parts[idx], Kernel(mdl, dist(parts[last(idx)]), K))
 end
 
 function _rejection(mdl::ImplicitPosterior, K::KernelRecipe, N, keep=N)
-    θ = Array{eltype(prior(mdl))}(undef, length(prior(mdl)), N)
-    X = Array{eltype(mdl)}(undef, length(mdl), N)
+    parts = Vector{Particle}(undef, N)
 
     Threads.@threads for i = 1:N
         (theta, xs) = rand(mdl.bayesmodel)
-        θ[:, i] .= theta
-        X[:, i] .= xs
+        parts[i] = Particle(theta, xs, distance(K, mdl, xs))
     end
-    ρ = distance.(K, mdl, eachcol(X))
 
-    u = rand(N)
-    h = _inv.(K.family, ρ, u)
-    
-    idx = getindex(sortperm(h), 1:keep)
-    return (θ[:, idx], X[:, idx], ρ[idx], Kernel(mdl, h[last(idx)], K))
+    h = _inv.(K.family, dist.(parts), rand(N))
+    idx = partialsortperm(h, 1:keep)
+
+    return (parts[idx], Kernel(mdl, h[last(idx)], K))
 end
 
 function _rejection(mdl::ImplicitPosterior, K::PosteriorApproximator{Uniform}, N)
-    θ = Array{eltype(prior(mdl))}(undef, length(prior(mdl)), N)
-    X = Array{eltype(mdl)}(undef, length(mdl), N)
-    ρ = Vector{Float64}(undef, N)
+    parts = Vector{Particle}(undef, N)
 
     Threads.@threads for i = 1:N
-        local theta, xs, dist
-        local done_sim = false
-        while !done_sim
+        local theta, xs
+        while true
             (theta, xs) = rand(mdl.bayesmodel)
-            dist = distance(K, xs)
-            done_sim = isfinite(logpdfu(K, xs))
+            isfinite(logpdfu(K, xs)) && break
         end
-        θ[:, i] .= theta
-        X[:, i] .= xs
-        ρ[i] = dist
+        parts[i] = Particle(theta, xs, distance(K, xs))
     end
 
-    idx = sortperm(ρ)
-    return (θ[:, idx], X[:, idx], ρ[idx], K)
+    sort!(parts; by=dist)
+    return parts
 end
 
 function _rejection(mdl::ImplicitPosterior, K::PosteriorApproximator, N)
-    θ = Array{eltype(prior(mdl))}(undef, length(prior(mdl)), N)
-    X = Array{eltype(mdl)}(undef, length(mdl), N)
-    ρ = Vector{Float64}(undef, N)
+    parts = Vector{Particle}(undef, N)
 
-    local kmax = pdfu(K, mdl.observed_summs)
+    local kmax = _pdfu(K, 0.0)
     Threads.@threads for i = 1:N
-        local theta, xs, dist
-        local done_sim = false
-        while !done_sim
+        local theta, xs
+        while true
             (theta, xs) = rand(mdl.bayesmodel)
-            dist = distance(K, xs)
-            done_sim = rand() ≤ pdfu(K, xs)/kmax
+            (rand() ≤ pdfu(K, xs)/kmax) && break
         end
-        θ[:, i] .= theta
-        X[:, i] .= xs
-        ρ[i] = dist
+        parts[i] = Particle(theta, xs, distance(K, xs))
     end
 
-    idx = sortperm(ρ)
-    return (θ[:, idx], X[:, idx], ρ[idx], K)
+    sort!(parts; by=dist)
+    return parts
 end
 
 # todo: Allow specifying kernel in a convenience wrapper

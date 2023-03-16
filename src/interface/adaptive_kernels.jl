@@ -20,3 +20,4 @@ function find_incremental_weights(post::ImplicitPosterior, kr::KernelRecipe{Unif
 end
 
 adapt_ess(post::ImplicitPosterior, kr::KernelRecipe, xs::Matrix{Float64}, target_ess::Int) = Kernel(post, find_incremental_weights(post, kr, xs, target_ess), kr)
+adapt_ess(post::ImplicitPosterior, kr::KernelRecipe, ps::Vector{Particle}, target_ess::Int) = adapt_ess(post, kr, summ(ps), target_ess)
