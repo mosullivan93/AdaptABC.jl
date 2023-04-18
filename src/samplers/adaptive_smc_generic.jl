@@ -227,7 +227,7 @@ end
 
 function particle_replenishment(s::AdaptiveSMCABCState, post::ImplicitPosterior, K::PosteriorApproximator, keep_idx::Vector{Int64}, move_idx::Vector{Int64})
     # Persist kept particles at the end, and initialise replenished particles at the beginning
-    pts = s.particles[vcat(move_idx, keep_idx)]
+    pts = deepcopy(s.particles[vcat(move_idx, keep_idx)])
 
     # Compute MCMC tuning parameters
     covs = compute_mcmc_covs(s, keep_idx, move_idx)
