@@ -38,11 +38,12 @@ abstract type AdaptiveWeighting <: KernelAdaptationStrategy; end
 abstract type OptimalAdaptiveScaling <: AdaptiveWeighting; end
 struct BandwidthOnlyAdaptation <: KernelAdaptationStrategy; target_ess::Int; end
 struct ScaleReciprocal <: AdaptiveWeighting; target_ess::Int; end
-struct OneAtATime <: OptimalAdaptiveScaling; target_ess::Int; end
-struct ManifoldQuasiNewton <: OptimalAdaptiveScaling; target_ess::Int; end
-struct ManifoldGradientDescent <: OptimalAdaptiveScaling; target_ess::Int; end
-struct ManifoldNelderMead <: OptimalAdaptiveScaling; target_ess::Int; end
-struct ManifoldDifferentialEvolution <: OptimalAdaptiveScaling; target_ess::Int; end
+struct OneAtATime <: OptimalAdaptiveScaling; target_ess::Int; k::Union{Missing, Int}; end
+struct EuclideanLBFGS <: OptimalAdaptiveScaling; target_ess::Int; k::Union{Missing, Int}; end
+struct ManifoldQuasiNewton <: OptimalAdaptiveScaling; target_ess::Int; k::Union{Missing, Int}; end
+struct ManifoldGradientDescent <: OptimalAdaptiveScaling; target_ess::Int; k::Union{Missing, Int}; end
+struct ManifoldNelderMead <: OptimalAdaptiveScaling; target_ess::Int; k::Union{Missing, Int}; end
+struct ManifoldDifferentialEvolution <: OptimalAdaptiveScaling; target_ess::Int; k::Union{Missing, Int}; end
 
 # is there a type that supports always returning the same thing for an index?
 # responsible for two parts: 1) computing covs, 2) computing R
@@ -73,6 +74,24 @@ find_opt_weights(s::AdaptiveSMCABCState, post::ImplicitPosterior, ake::AdaptiveK
 function find_opt_weights(::Type{OneAtATime}, s::AdaptiveSMCABCState, post::ImplicitPosterior, ake::AdaptiveKernelEstimator)
     S = length(post)
     return argmin(Base.Fix1(logestb, ake), convert(Vector{Float64}, 1:S .== i) for i = 1:S)
+end
+function find_opt_weights(::Type{EuclideanLBFGS}, s::AdaptiveSMCABCState, post::ImplicitPosterior, ake::AdaptiveKernelEstimator)
+    obj(p) = logestb(ake, p ./ s.summary_scales)
+
+    n_multistarts = 50
+
+    lx = zeros(length(post))
+    ux = fill(1e8, length(post))
+
+    st_pts = ux.*rand(length(post), n_multistarts)
+    ms_res = Vector{Tuple{Float64, Vector{Float64}}}(undef, n_multistarts)
+    Threads.@threads for I = 1:n_multistarts
+        opt_res = Optim.optimize(obj, lx, ux, st_pts[:, I], Optim.Fminbox(Optim.LBFGS()))
+        ms_res[I] = (Optim.minimum(opt_res), Optim.minimizer(opt_res))
+    end
+    opt_res = last(argmin(first, ms_res))
+
+    return opt_res./s.summary_scales
 end
 function find_opt_weights(::Type{ManifoldDifferentialEvolution}, s::AdaptiveSMCABCState, post::ImplicitPosterior, ake::AdaptiveKernelEstimator)
     man = Manifolds.ProbabilitySimplex(Val(length(post)-1))
@@ -130,7 +149,7 @@ end
 # Use an adaptive scaling transform according to the adaptation strategy's weighting optimiser
 choose_weights(s::AdaptiveSMCABCState{P, K, ScaleReciprocal, PS} where {P, K, PS}, ::ImplicitPosterior) = 1.0 ./ s.summary_scales
 function choose_weights(s::AdaptiveSMCABCState, post::ImplicitPosterior)
-    ake = AdaptiveKernelEstimator(ifelse(_density(s.kernel) isa Uniform, SubsetSampleBC, WeightedSampleBC), post, param(s.particles), summ(s.particles), recipe(s.kernel), s.kas.target_ess)
+    ake = AdaptiveKernelEstimator(ifelse(_density(s.kernel) isa Uniform, SubsetSampleBC, WeightedSampleBC), post, param(s.particles), summ(s.particles), recipe(s.kernel), s.kas.target_ess; k=s.kas.k)
     return find_opt_weights(s, post, ake)
 end
 
@@ -249,9 +268,9 @@ end
 isdone(s::AdaptiveSMCABCState) = s.p_acc < s.p_thresh
 
 # function adaptive_smc_sampler_opt_dfo(post::ImplicitPosterior{M, P, S}, K::KernelRecipe{Uniform, D, T}, N::Int, drop::Percentage=%(50), R₀::Int=10, p_thresh::Float64=0.05, c::Float64=0.05, k::Union{Int, Missing}=missing) where {M, P, S, D, T}
-function adaptive_smc_generic(post::ImplicitPosterior, N::Int, K::KernelRecipe{Uniform}, ::Type{kas}, ::Type{pss}, drop::Percentage=%(50), R₀::Int=10, p_thresh::Float64=0.05, c::Float64=0.05) where {kas<:KernelAdaptationStrategy, pss <: ParticlePerturbationStrategy}
+function adaptive_smc_generic(post::ImplicitPosterior, N::Int, K::KernelRecipe{Uniform}, ::Type{kas}, ::Type{pss}, drop::Percentage=%(50), R₀::Int=10, p_thresh::Float64=0.05, c::Float64=0.05, k::Union{Int, Missing}=missing) where {kas<:KernelAdaptationStrategy, pss <: ParticlePerturbationStrategy}
     # initialise algorithm state
-    state = init(post, N, K, kas(N-drop(N)), pss(c), R₀, p_thresh)
+    state = init(post, N, K, kas(vcat(N-drop(N), ifelse(kas <: OptimalAdaptiveScaling, k, Int[]))...), pss(c), R₀, p_thresh)
     # Can initialise this with an empty vector so that history stays as a cons type to ensure stability. vcat will ignore it.
     history = cons([state], nil(Vector{typeof(state)}))
     # iterate state
@@ -262,7 +281,6 @@ function adaptive_smc_generic(post::ImplicitPosterior, N::Int, K::KernelRecipe{U
 
     state = final_perturbation(state, post)
     history = cons([state], history)
-    # do final perturbation?
 
     # return something
     parts(state), reduce(vcat, reverse(history))

@@ -61,9 +61,14 @@ function silverman_rule_of_thumb(ps::AbstractMatrix)
     d, N = size(ps)
     return sqrt(mean(var(ps, dims=2)))*(4/(d+2)/N)^(1/(d+4))
 end
-# adaptive_k(ps, nus) = count(mean(nus) .< silverman_rule_of_thumb(ps)) + 1
-adaptive_k(ps, nus) = count(mean(nus, dims=2) .< silverman_rule_of_thumb(ps)) + 1
-# adaptive_k(ps, nus) = 5
+# adaptive_k(ps, nus) = count(mean(nus, dims=2) .< silverman_rule_of_thumb(ps)) + 1
+function adaptive_k(ps, nus)
+    d, N = size(ps)
+    h_opt = sqrt(mean(var(ps, dims=2)))*2*(gamma(d/2+2)/2/N)^(1/(d+4))
+    # h_opt = sqrt(d + 2)*silverman_rule_of_thumb(ps)
+    return argmin(vec(sum((nus .- h_opt).^2, dims=2)))
+end
+# adaptive_k(ps, nus) = count(median(nus, dims=2) .< sqrt(size(ps, 1) + 2)*silverman_rule_of_thumb(ps)) + 1
 
 struct WeightedSampleBC <: BhattacharyyaCoefficient
     # Log of the non-weight terms in the summand of the estimator.
@@ -94,7 +99,7 @@ struct WeightedSampleBC <: BhattacharyyaCoefficient
         lqs = logpdf.(q, ps)
 
         if ismissing(k)
-            k = adaptive_k(ps, nus)
+            k = max(2, adaptive_k(ps, nus))
         end
         lηs = log.(nus[k, :])
 
@@ -140,7 +145,7 @@ struct SubsetSampleBC <: BhattacharyyaCoefficient
                 # sort!(c, 1, size(nus_init, 1), Base.QuickSort, Base.Forward);
             end
             # adapting k will cost at least one sort operation.
-            k = adaptive_k(ps, nus_init)
+            k = max(2, adaptive_k(ps, nus_init))
         end
 
         return new(nus, lqs, N, d, k)

@@ -1,2 +1,5 @@
 ## Ignore Julia project manifests
 **/Manifest.toml
+
+# IDE artifacts
+**/.vscode

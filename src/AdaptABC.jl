@@ -73,7 +73,8 @@ export
     # Generic algorithm building blocks
     AdaptiveSMCABCState,
     adaptive_smc_generic,
-    BandwidthOnlyAdaptation, ScaleReciprocal, OneAtATime,
+    BandwidthOnlyAdaptation, ScaleReciprocal,
+    OneAtATime, EuclideanLBFGS,
     ManifoldQuasiNewton, ManifoldGradientDescent,
     ManifoldNelderMead, ManifoldDifferentialEvolution,
     GlobalCovariance, LocalCovariance
